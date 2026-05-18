@@ -91,6 +91,7 @@ class Plugin implements ChannelProcessorPluginInterface, HookablePluginInterface
         'ae' => 'united-arab-emirates',
         'gb' => 'united-kingdom',
         'us' => 'united-states',
+        'th' => 'thailand',
 
         // ── Nordic countries (nested under countries/nordic/) ─────────────
         'dk' => 'nordic/denmark',
