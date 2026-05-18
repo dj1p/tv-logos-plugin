@@ -1,6 +1,6 @@
 <?php
 
-namespace App\LocalPlugins\TvLogos;
+namespace AppLocalPlugins\TvLogos;
 
 use App\Models\Channel;
 use App\Plugins\Contracts\ChannelProcessorPluginInterface;
