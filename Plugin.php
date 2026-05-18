@@ -168,7 +168,7 @@ class Plugin implements ChannelProcessorPluginInterface, HookablePluginInterface
         $manifestTotal     = null;
 
         try {
-            $r = Http::timeout(10)->head("{$cdnBase}/united-states/espn-us.png");
+           $r = Http::timeout(10)->head("{$cdnBase}/nordic/norway/nrk1-no.png");
             $cdnReachable = $r->successful();
         } catch (Throwable) {}
 
