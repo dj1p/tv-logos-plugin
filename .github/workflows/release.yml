@@ -1,0 +1,44 @@
+name: Package & Release Plugin
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build zip
+        run: |
+          mkdir -p dist
+          zip -r dist/tv-logos-${{ github.ref_name }}.zip \
+            Plugin.php \
+            plugin.json \
+            README.md \
+            -x "*.git*"
+
+      - name: Compute SHA-256
+        id: sha
+        run: |
+          SHA=$(sha256sum dist/tv-logos-${{ github.ref_name }}.zip | awk '{print $1}')
+          echo "sha256=$SHA" >> $GITHUB_OUTPUT
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/tv-logos-${{ github.ref_name }}.zip
+          body: |
+            ## Install
+
+            ```
+            php artisan plugins:stage-github-release \
+              https://github.com/dj1p/tv-logos-plugin/releases/download/${{ github.ref_name }}/tv-logos-${{ github.ref_name }}.zip \
+              --sha256=${{ steps.sha.outputs.sha256 }}
+            ```
+
+            **SHA-256:** `${{ steps.sha.outputs.sha256 }}`
