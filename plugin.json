@@ -1,10 +1,10 @@
 {
   "id": "tv-logos",
   "name": "TV Logos",
-  "version": "1.0.8",
+  "version": "1.1.0",
   "api_version": "1.0.0",
-  "repository": "m3ue/tv-logos-plugin",
-  "description": "Automatically enriches channel logos from the open-source tv-logo/tv-logos repository via the jsDelivr CDN.",
+  "repository": "dj1p/tv-logos-plugin",
+  "description": "Automatically enriches channel logos from a self-hosted CDN (tvlogos.austheim.app) using a pre-built manifest — no GitHub API rate limits.",
   "entrypoint": "Plugin.php",
   "class": "AppLocalPlugins\\TvLogos\\Plugin",
   "capabilities": [
@@ -39,16 +39,23 @@
       "id": "source_target",
       "type": "section",
       "label": "Source & Target",
-      "description": "Logo source repository and playlist assignment.",
+      "description": "Logo CDN source and playlist assignment.",
       "collapsible": true,
       "collapsed": false,
       "fields": [
         {
-          "id": "github_repo",
-          "label": "GitHub Repository (owner/repo)",
+          "id": "cdn_base",
+          "label": "CDN Base URL",
           "type": "text",
-          "default": "tv-logo/tv-logos",
-          "helper_text": "GitHub repository for logo files. Change to use a fork, e.g. your-username/tv-logos."
+          "default": "https://tvlogos.austheim.app/countries",
+          "helper_text": "Base URL for logo files (without trailing slash). Must point to a directory that contains country subfolders, e.g. /countries/norway/nrk1-no.png."
+        },
+        {
+          "id": "manifest_url",
+          "label": "Manifest URL",
+          "type": "text",
+          "default": "https://tvlogos.austheim.app/logos-manifest.json",
+          "helper_text": "URL of the logos-manifest.json file. The manifest is fetched once per cache TTL and used for fast logo lookups without GitHub API calls."
         },
         {
           "id": "default_playlist_id",
@@ -63,9 +70,10 @@
         },
         {
           "id": "country_code",
-          "label": "Country Code (e.g. us, gb, de, fr)",
+          "label": "Country Code",
           "type": "text",
-          "default": "us"
+          "default": "us",
+          "helper_text": "ISO 3166-1 alpha-2 country code, e.g. no, gb, de, us. Nordic countries (no, se, dk, fi, is) are supported via the nordic/ subfolder. Use 'nordic' to match all Nordic logos at once."
         }
       ]
     },
@@ -93,7 +101,8 @@
           "id": "cache_ttl_days",
           "label": "Match cache TTL in days (0 = never expire)",
           "type": "number",
-          "default": 7
+          "default": 7,
+          "helper_text": "How long to cache logo matches and the manifest index. Set to 0 to always re-fetch. Recommended: 7 days."
         }
       ]
     },
