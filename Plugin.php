@@ -23,7 +23,7 @@ class Plugin implements ChannelProcessorPluginInterface, HookablePluginInterface
     private const DEFAULT_MANIFEST_URL = 'https://logos.austheim.app/logos-manifest.json';
 
     private const CACHE_FILE     = 'plugin-data/tv-logos/matches.json';
-    private const CACHE_VERSION  = 5;   // bump forces a full cache flush on first run
+    private const CACHE_VERSION  = 6;   // bump forces a full cache flush on first run
     private const LOG_BATCH_SIZE = 100;
 
     private string $cdnBase;
