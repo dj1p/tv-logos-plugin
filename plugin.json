@@ -6,7 +6,7 @@
   "repository": "dj1p/tv-logos-plugin",
   "description": "Automatically enriches channel logos from a self-hosted CDN (tvlogos.austheim.app) using a pre-built manifest — no GitHub API rate limits.",
   "entrypoint": "Plugin.php",
-  "class": "AppLocalPlugins\\TvLogos\\Plugin",
+"class": "AppLocalPlugins\\TvLogos\\Plugin",
   "capabilities": [
     "channel_processor"
   ],
