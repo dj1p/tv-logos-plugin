@@ -1,6 +1,6 @@
 <?php
 
-namespace AppLocalPlugins\TvLogos;
+namespace App\LocalPlugins\TvLogos;
 
 use App\Models\Channel;
 use App\Plugins\Contracts\ChannelProcessorPluginInterface;
@@ -16,11 +16,11 @@ use Throwable;
 class Plugin implements ChannelProcessorPluginInterface, HookablePluginInterface, PluginInterface
 {
     // -------------------------------------------------------------------------
-    // Self-hosted CDN (tvlogos.austheim.app) — no GitHub API rate limits.
+    // Self-hosted CDN (logos.austheim.app) — no GitHub API rate limits.
     // The manifest is fetched once per cache TTL and contains every logo path.
     // -------------------------------------------------------------------------
-    private const DEFAULT_CDN_BASE     = 'https://tvlogos.austheim.app/countries';
-    private const DEFAULT_MANIFEST_URL = 'https://tvlogos.austheim.app/logos-manifest.json';
+    private const DEFAULT_CDN_BASE     = 'https://logos.austheim.app/countries';
+    private const DEFAULT_MANIFEST_URL = 'https://logos.austheim.app/logos-manifest.json';
 
     private const CACHE_FILE     = 'plugin-data/tv-logos/matches.json';
     private const CACHE_VERSION  = 5;   // bump forces a full cache flush on first run
@@ -168,7 +168,7 @@ class Plugin implements ChannelProcessorPluginInterface, HookablePluginInterface
         $manifestTotal     = null;
 
         try {
-           $r = Http::timeout(10)->head("{$cdnBase}/nordic/norway/nrk1-no.png");
+            $r = Http::timeout(10)->head("{$cdnBase}/united-states/espn-us.png");
             $cdnReachable = $r->successful();
         } catch (Throwable) {}
 
@@ -387,7 +387,7 @@ class Plugin implements ChannelProcessorPluginInterface, HookablePluginInterface
     // =========================================================================
 
     /**
-     * Fetch logos-manifest.json from tvlogos.austheim.app.
+     * Fetch logos-manifest.json from logos.austheim.app.
      *
      * The manifest has the shape:
      *   { "generated": "auto", "total": N, "logos": [
@@ -676,10 +676,37 @@ class Plugin implements ChannelProcessorPluginInterface, HookablePluginInterface
     }
 
     /**
+     * Number words ↔ digits for dual-variant slug generation.
+     * e.g. "BBC 1" can match "bbc-one-gb.png" and vice-versa.
+     *
+     * @var array<string, string>
+     */
+    private const NUMBER_WORDS = [
+        'one'   => '1',  'two'   => '2',  'three' => '3',
+        'four'  => '4',  'five'  => '5',  'six'   => '6',
+        'seven' => '7',  'eight' => '8',  'nine'  => '9',
+        'ten'   => '10', 'eleven'=> '11', 'twelve'=> '12',
+    ];
+
+    /**
+     * Country prefix patterns that IPTV providers prepend to channel names.
+     * e.g. "UK: BBC 1", "NO: NRK1", "US: ESPN" — the prefix is stripped
+     * before slugifying so it doesn't end up in the candidate filenames.
+     */
+    private const COUNTRY_PREFIX_PATTERN = '/^[A-Z]{2,3}:\s*/u';
+
+    /**
      * Normalise a channel name into a hyphenated slug.
+     *
+     * Always strips leading country prefixes (e.g. "UK: ", "NO: ").
+     * Returns the base slug; callers should also generate a number-swapped
+     * variant via slugifyWithNumberSwap() for broader matching.
      */
     private function slugify(string $name, bool $stripQualityTags = true): string
     {
+        // Strip leading country prefix e.g. "UK: ", "NO: ", "US: "
+        $name = preg_replace(self::COUNTRY_PREFIX_PATTERN, '', $name) ?? $name;
+
         // Split camelCase / PascalCase before lowercasing
         $name = preg_replace('/(?<=[a-z])(?=[A-Z])/', ' ', $name) ?? $name;
         $name = mb_strtolower($name, 'UTF-8');
@@ -706,6 +733,45 @@ class Plugin implements ChannelProcessorPluginInterface, HookablePluginInterface
         $name = preg_replace('/-+/', '-', $name) ?? $name;
 
         return trim($name, '-');
+    }
+
+    /**
+     * Produce a number-swapped variant of a slug.
+     *
+     * If the slug contains digit words (one, two …), replace them with digits.
+     * If the slug contains digits, replace them with words.
+     * Returns null when no swap is possible (nothing to swap).
+     *
+     * Examples:
+     *   "bbc-1"   → "bbc-one"
+     *   "bbc-one" → "bbc-1"
+     *   "itv-2"   → "itv-two"
+     */
+    private function swapNumbers(string $slug): ?string
+    {
+        // Try digits → words first
+        $swapped = preg_replace_callback(
+            '/(?<=-|^)(\d+)(?=-|$)/',
+            function (array $m): string {
+                $flipped = array_flip(self::NUMBER_WORDS);
+                return $flipped[$m[1]] ?? $m[1];
+            },
+            $slug
+        ) ?? $slug;
+
+        if ($swapped !== $slug) {
+            return $swapped;
+        }
+
+        // Try words → digits
+        $pattern = '/(?<=-|^)(' . implode('|', array_keys(self::NUMBER_WORDS)) . ')(?=-|$)/i';
+        $swapped = preg_replace_callback(
+            $pattern,
+            fn (array $m): string => self::NUMBER_WORDS[strtolower($m[1])] ?? $m[1],
+            $slug
+        ) ?? $slug;
+
+        return $swapped !== $slug ? $swapped : null;
     }
 
     private function urlExists(string $url): bool
