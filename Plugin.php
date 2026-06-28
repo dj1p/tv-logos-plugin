@@ -230,7 +230,11 @@ class Plugin implements ChannelProcessorPluginInterface, HookablePluginInterface
         $settings = $context->settings;
 
         // ── Settings ─────────────────────────────────────────────────────────
-        $countryCode     = strtolower(trim((string) ($settings['country_code']     ?? 'us')));
+        $rawCodes        = strtolower(trim((string) ($settings['country_code']     ?? 'us')));
+        $countryCodes    = array_values(array_filter(array_map('trim', explode(',', $rawCodes))));
+        if ($countryCodes === []) {
+            $countryCodes = ['us'];
+        }
         $overwrite       = (bool) ($overrides['overwrite_existing'] ?? $settings['overwrite_existing'] ?? false);
         $skipVod         = (bool) ($overrides['skip_vod']           ?? $settings['skip_vod']           ?? true);
         $ignoreCache     = (bool) ($overrides['ignore_cache']       ?? false);
@@ -242,14 +246,24 @@ class Plugin implements ChannelProcessorPluginInterface, HookablePluginInterface
         $this->manifestUrl = rtrim((string) ($settings['manifest_url'] ?? self::DEFAULT_MANIFEST_URL), '/');
 
         // ── Validate country ──────────────────────────────────────────────────
-        $countryFolder = self::COUNTRY_FOLDERS[$countryCode] ?? null;
-        if ($countryFolder === null) {
+        $countryFolders = [];
+        $invalidCodes   = [];
+        foreach ($countryCodes as $code) {
+            $folder = self::COUNTRY_FOLDERS[$code] ?? null;
+            if ($folder === null) {
+                $invalidCodes[] = $code;
+            } else {
+                $countryFolders[$code] = $folder;
+            }
+        }
+        if ($invalidCodes !== []) {
             return PluginActionResult::failure(sprintf(
                 'Unknown country code [%s]. Supported codes: %s.',
-                $countryCode,
+                implode(', ', $invalidCodes),
                 implode(', ', array_keys(self::COUNTRY_FOLDERS))
             ));
         }
+        $countryCode = implode(', ', $countryCodes);
 
         // ── Load cache & manifest ─────────────────────────────────────────────
         $cache        = $this->loadCache($cacheTtlDays);
@@ -259,19 +273,22 @@ class Plugin implements ChannelProcessorPluginInterface, HookablePluginInterface
         $manifest = $this->fetchManifest($cache, $cacheChanged, $ignoreCache);
 
         // Build per-country indexes from the manifest.
-        [$index, $byBasename] = $this->buildCountryIndex($manifest, $countryFolder);
-
-        if ($index !== []) {
-            $context->info(sprintf(
-                'Loaded %d logo entries for "%s" from manifest.',
-                count($index),
-                $countryFolder
-            ));
-        } else {
-            $context->info(sprintf(
-                'No manifest entries found for "%s". Falling back to CDN HEAD checks.',
-                $countryFolder
-            ));
+        $countryIndexes = [];
+        foreach ($countryFolders as $code => $folder) {
+            [$index, $byBasename] = $this->buildCountryIndex($manifest, $folder);
+            $countryIndexes[$code] = ['folder' => $folder, 'index' => $index, 'byBasename' => $byBasename];
+            if ($index !== []) {
+                $context->info(sprintf(
+                    'Loaded %d logo entries for "%s" from manifest.',
+                    count($index),
+                    $folder
+                ));
+            } else {
+                $context->info(sprintf(
+                    'No manifest entries found for "%s". Falling back to CDN HEAD checks.',
+                    $folder
+                ));
+            }
         }
 
         // ── Query channels ────────────────────────────────────────────────────
@@ -322,13 +339,19 @@ class Plugin implements ChannelProcessorPluginInterface, HookablePluginInterface
 
             $processed++;
             $normalizedName = $this->normalizeChannelName($displayName, $normConfig);
-            $cacheKey       = $countryCode . ':' . mb_strtolower($normalizedName, 'UTF-8');
+            $cacheKey       = $rawCodes . ':' . mb_strtolower($normalizedName, 'UTF-8');
 
             if (! $ignoreCache && array_key_exists($cacheKey, $cache['matches'])) {
                 $logoUrl   = $cache['matches'][$cacheKey] ?: null;
                 $cacheHits++;
             } else {
-                $logoUrl = $this->resolveLogoUrl($normalizedName, $countryCode, $countryFolder, $index, $byBasename);
+                $logoUrl = null;
+                foreach ($countryIndexes as $code => $data) {
+                    $logoUrl = $this->resolveLogoUrl($normalizedName, $code, $data['folder'], $data['index'], $data['byBasename']);
+                    if ($logoUrl !== null) {
+                        break;
+                    }
+                }
                 $cache['matches'][$cacheKey] = $logoUrl ?? '';
                 $cacheChanged = true;
                 $cacheMisses++;
