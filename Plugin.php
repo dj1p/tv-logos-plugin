@@ -19,8 +19,8 @@ class Plugin implements ChannelProcessorPluginInterface, HookablePluginInterface
     // Self-hosted CDN (logos.austheim.app) — no GitHub API rate limits.
     // The manifest is fetched once per cache TTL and contains every logo path.
     // -------------------------------------------------------------------------
-    private const DEFAULT_CDN_BASE     = 'https://logos.austheim.app/countries';
-    private const DEFAULT_MANIFEST_URL = 'https://logos.austheim.app/logos-manifest.json';
+    private const DEFAULT_CDN_BASE     = 'https://tvlogos.austheim.app/countries';
+    private const DEFAULT_MANIFEST_URL = 'https://tvlogos.austheim.app/logos-manifest.json';
 
     private const CACHE_FILE     = 'plugin-data/tv-logos/matches.json';
     private const CACHE_VERSION  = 6;   // bump forces a full cache flush on first run
