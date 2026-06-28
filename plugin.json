@@ -1,7 +1,7 @@
 {
   "id": "tv-logos",
   "name": "TV Logos",
-  "version": "1.1.0",
+  "version": "1.1.2",
   "api_version": "1.0.0",
   "repository": "dj1p/tv-logos-plugin",
   "description": "Automatically enriches channel logos from a self-hosted CDN (tvlogos.austheim.app) using a pre-built manifest — no GitHub API rate limits.",
@@ -73,7 +73,7 @@
           "label": "Country Code",
           "type": "text",
           "default": "us",
-          "helper_text": "ISO 3166-1 alpha-2 country code, e.g. no, gb, de, us. Nordic countries (no, se, dk, fi, is) are supported via the nordic/ subfolder. Use 'nordic' to match all Nordic logos at once."
+          "helper_text": "One or more ISO 3166-1 alpha-2 country codes, comma-separated, e.g. no, gb, us. Logos are searched in the order listed. Nordic countries (no, se, dk, fi, is) are supported via the nordic/ subfolder. Use 'nordic' to match all Nordic logos at once."
         }
       ]
     },
