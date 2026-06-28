@@ -23,8 +23,18 @@ class Plugin implements ChannelProcessorPluginInterface, HookablePluginInterface
     private const DEFAULT_MANIFEST_URL = 'https://tvlogos.austheim.app/logos-manifest.json';
 
     private const CACHE_FILE     = 'plugin-data/tv-logos/matches.json';
-    private const CACHE_VERSION  = 6;   // bump forces a full cache flush on first run
+    private const CACHE_VERSION  = 7;   // bump forces a full cache flush on first run
     private const LOG_BATCH_SIZE = 100;
+
+    /**
+     * Some logo repositories use a different code in filenames than the ISO 3166-1 alpha-2 code.
+     * Maps ISO code → alternative filename codes to try (in addition to the ISO code).
+     *
+     * @var array<string, list<string>>
+     */
+    private const FILENAME_CODE_ALIASES = [
+        'gb' => ['uk'],  // United Kingdom logos use "-uk.png" suffix, not "-gb.png"
+    ];
 
     private string $cdnBase;
     private string $manifestUrl;
@@ -366,6 +376,20 @@ class Plugin implements ChannelProcessorPluginInterface, HookablePluginInterface
             } else {
                 $unmatched++;
                 $batchUnmatched[] = $displayName;
+                // Log first 5 misses with slug details to aid debugging
+                if ($unmatched <= 5) {
+                    $debugSlugs = array_values(array_unique(array_filter([
+                        $this->slugify($normalizedName, false),
+                        $this->slugify($normalizedName, true),
+                    ])));
+                    $context->info(sprintf(
+                        'Miss #%d: "%s" → slugs: [%s] → tried: [%s]',
+                        $unmatched,
+                        $displayName,
+                        implode(', ', $debugSlugs),
+                        implode(', ', array_slice($this->buildFilenamesForSlugs($debugSlugs, 'us'), 0, 4))
+                    ));
+                }
             }
 
             if ($processed % self::LOG_BATCH_SIZE === 0) {
@@ -488,6 +512,14 @@ class Plugin implements ChannelProcessorPluginInterface, HookablePluginInterface
 
             $index[$lowRelative]     = true;
             $byBasename[$lowBasename][] = $lowRelative;
+
+            // Some repos (e.g. Norway, Thailand) use spaces in filenames.
+            // Also index a hyphenated variant so slug-based lookups can find them.
+            // e.g. "NO-BBC World News.png" → also keyed as "no-bbc-world-news.png"
+            $hyphenated = str_replace(' ', '-', $lowBasename);
+            if ($hyphenated !== $lowBasename) {
+                $byBasename[$hyphenated][] = $lowRelative;
+            }
         }
 
         return [$index, $byBasename];
@@ -617,7 +649,12 @@ class Plugin implements ChannelProcessorPluginInterface, HookablePluginInterface
         string $channelName,
         array  $index
     ): ?string {
-        $suffixes             = ["-{$countryCode}.png", '.png'];
+        $altCodes             = self::FILENAME_CODE_ALIASES[$countryCode] ?? [];
+        $suffixes             = ["-{$countryCode}.png"];
+        foreach ($altCodes as $alt) {
+            $suffixes[] = "-{$alt}.png";
+        }
+        $suffixes[]           = '.png';
         $qualityFolders       = $this->preferredQualityFolders($channelName);
         $compactChannelSlugs  = array_map(fn (string $s): string => str_replace('-', '', $s), $slugs);
 
@@ -671,11 +708,20 @@ class Plugin implements ChannelProcessorPluginInterface, HookablePluginInterface
      */
     private function buildFilenamesForSlugs(array $slugs, string $countryCode): array
     {
+        $altCodes = self::FILENAME_CODE_ALIASES[$countryCode] ?? [];
         $filenames = [];
 
         foreach ($slugs as $slug) {
+            // Standard: slug-countrycode.png (e.g. bbc-one-us.png)
             $filenames[] = "{$slug}-{$countryCode}.png";
+            // Alt codes: e.g. bbc-one-uk.png when countryCode is "gb"
+            foreach ($altCodes as $alt) {
+                $filenames[] = "{$slug}-{$alt}.png";
+            }
+            // No country code (covers Thailand-style names: ch7.png, gmm-25.png)
             $filenames[] = "{$slug}.png";
+            // Prefix format: countrycode-slug.png (covers Norway-style: no-nrk1.png)
+            $filenames[] = "{$countryCode}-{$slug}.png";
 
             $parts        = explode('-', $slug);
             $lastPart     = end($parts);
@@ -685,6 +731,10 @@ class Plugin implements ChannelProcessorPluginInterface, HookablePluginInterface
                 $shortened = implode('-', array_slice($parts, 0, -1));
                 if ($shortened !== '') {
                     $filenames[] = "{$shortened}-{$countryCode}.png";
+                    foreach ($altCodes as $alt) {
+                        $filenames[] = "{$shortened}-{$alt}.png";
+                    }
+                    $filenames[] = "{$countryCode}-{$shortened}.png";
                 }
             }
         }
